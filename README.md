@@ -1,137 +1,121 @@
-![Nakama](.github/logo.png?raw=true "Nakama logo")
-======
+nakama服务端部署
 
-[![GitHub release](https://img.shields.io/github/release/heroiclabs/nakama.svg)](https://heroiclabs.com/docs/nakama-download/)
-[![Forum](https://img.shields.io/badge/forum-online-success.svg)](https://forum.heroiclabs.com)
-[![License](https://img.shields.io/github/license/heroiclabs/nakama.svg)](https://github.com/heroiclabs/nakama/blob/master/LICENSE)
+```java
+基础部分
+1 迁移/绑定数据库 for PosgreSQL
+./nakama migrate up --database.address ysr:123456@127.0.0.1:5432
+2.1 启动服务器 for PostgreSQL
+./nakama --database.address ysr:123456@127.0.0.1:5432
+2.2 通过配置文件启动服务器
+sudo ./nakama --config ./data/path/to/nakama-config.yml
+（nakama --config xxxx.yml） 启动时设置配置文件
 
-> Distributed server for social and realtime games and apps.
+// 游戏管理端控制台 默认账号密码 admin:password
+*也可以通过systemd成为系统服务
 
-## Features
+服务器配置
+// 相关端口 默认
+7530 HTTP API
+7351 游戏控制台
+7349 gRPC API
+7348 gRPC API server for the embedded （嵌入式？）
 
-* **Users** - Register/login new users via social networks, email, or device ID.
-* **Storage** - Store user records, settings, and other objects in collections.
-* **Social** - Users can connect with friends, and join groups. Builtin social graph to see how users can be connected.
-* **Chat** - 1-on-1, group, and global chat between users. Persist messages for chat history.
-* **Multiplayer** - Realtime, or turn-based active and passive multiplayer.
-* **Leaderboards** - Dynamic, seasonal, get top members, or members around a user. Have as many as you need.
-* **Tournaments** - Invite players to compete together over prizes. Link many together to create leagues.
-* **Parties** - Add team play to a game. Users can form a party and communicate with party members.
-* **Runtime code** - Extend the server with custom logic written in Lua, TypeScript/JavaScript, or native Go code.
-* **Matchmaker**, **dashboard**, **metrics**, and [more](https://heroiclabs.com/docs).
+相关配置参考 https://heroiclabs.com/docs/nakama/getting-started/configuration/
 
-Build scalable games and apps with a production ready server used by ambitious game studios and app developers [all around the world](https://heroiclabs.com/customers/). Have a look at the [documentation](https://heroiclabs.com/docs) and join the [developer community](https://forum.heroiclabs.com) for more info.
+nakama相关指令
+migrate // 迁移
+migrate up  创建数据库架构并将其更新为 Nakama 所需的最新版本。默认情况下，模式会按顺序更新到最新的可用模式
+migrate status 提供有关当前应用于数据库的模式的信息，以及是否有未应用的模式。
+migrate down 将数据库模式降级到请求的版本。默认情况下，它一次降级一个架构更改。
+migrate redo 降级一项架构更改，然后重新应用更改。
 
-## Getting Started
+database.address 要连接的数据库节点。它应该遵循username:password@address:port/dbname（postgres://协议自动附加到路径）的形式。默认为root@localhost:26257.
+--limit 无论是在运行时使用的迁移数up，down或redo。
 
-The server is simple to setup and run for local development and can be deployed to any cloud provider. See the [deployment notes](#deployment) for recommendations on how to deploy the project for production. Nakama server requires CockroachDB or another Postgres wire-compatible server as it's database.
+config  // 替换配置
+nakama --config path/to/xxx.yml --database.address root@localhost:26257 --database.address root@machine-2:26257
 
-### Docker
-
-<a href="https://heroiclabs.com/docs/install-docker-quickstart/"><img src="https://upload.wikimedia.org/wikipedia/commons/7/79/Docker_%28container_engine%29_logo.png" width="170"></a>
-
-The fastest way to run the server and the database is with Docker. Setup Docker and start the daemon.
-
-1. Set up a [docker-compose file](https://heroiclabs.com/docs/install-docker-quickstart/#using-docker-compose) and place it in a folder for your project.
-
-2. Run `docker-compose -f ./docker-compose.yml up` to download container images and run the servers.
-
-For more detailed instructions have a look at our [Docker quickstart](https://heroiclabs.com/docs/install-docker-quickstart) guide.
-
-Nakama Docker images are maintained on [Docker Hub](https://hub.docker.com/r/heroiclabs/nakama/tags) and [prerelease](https://hub.docker.com/r/heroiclabs/nakama-prerelease/tags) images are occasionally published for cutting edge features of the server.
-
-### Binaries
-
-You can run the servers with native binaries for your platform.
-
-1. Download the server from our [releases](https://github.com/heroiclabs/nakama/releases) page and the [database](https://www.cockroachlabs.com/docs/stable/install-cockroachdb.html).
-
-2. Follow the database [instructions](https://www.cockroachlabs.com/docs/stable/start-a-local-cluster.html#before-you-begin) to start it.
-
-3. Run a migration which will setup or upgrade the database schema:
-
-   ```shell
-   nakama migrate up --database.address "root@127.0.0.1:26257"
-   ```
-
-4. Start Nakama and connect to the database:
-
-   ```shell
-   nakama --database.address "root@127.0.0.1:26257"
-   ```
-
-When connected you'll see server output which describes all settings the server uses for [configuration](https://heroiclabs.com/docs/install-configuration).
-
-> {"level":"info","ts":"2018-04-29T10:14:41.249+0100","msg":"Node","name":"nakama","version":"2.0.0+7e18b09","runtime":"go1.10.1","cpu":4} <br/>
-> {"level":"info","ts":"2018-04-29T10:14:41.249+0100","msg":"Database connections","dsns":["root@127.0.0.1:26257"]} <br/>
-> ...
-
-## Usage
-
-Nakama supports a variety of protocols optimized for various gameplay or app use cases. For request/response it can use GRPC or the HTTP1.1+JSON fallback (REST). For realtime communication you can use WebSockets or rUDP.
-
-For example with the REST API to authenticate a user account with a device identifier.
-
-```shell
-curl "127.0.0.1:7350/v2/account/authenticate/device?create=true" \
-  --user "defaultkey:" \
-  --data '{"id": "someuniqueidentifier"}'
+具体指令参考 https://heroiclabs.com/docs/nakama/getting-started/configuration/
 ```
 
-Response:
+```yaml
+#配制文件相关
 
-> { <br>
->     "token":"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE1MjQ5OTU2NDksInVpZCI6Ijk5Y2Q1YzUyLWE5ODgtNGI2NC04YThhLTVmMTM5YTg4MTgxMiIsInVzbiI6InhBb1RxTUVSdFgifQ.-3_rXNYx3Q4jKuS7RkxeMWBzMNAm0vl93QxzRI8p_IY" <br>
-> }
+name: nakama-node-1              # 节点名称（必须是唯一的）
+data_dir: "./data/"              # Nakama 将存储其数据（包括日志）的可写文件夹的绝对路径。默认值是启动 Nakama 的工作目录。
 
-There's a number of official [client libraries](https://github.com/heroiclabs) available on GitHub with [documentation](https://heroiclabs.com/docs). The current platform/language support includes: .NET (in C#), Unity engine, JavaScript, Java (with Android), Unreal engine, Godot, Defold, and Swift (with iOS). If you'd like to contribute a client or request one let us know.
+logger:
+  stdout: false                     # 将日志重定向到控制台标准输出。将不再使用日志文件。默认为true。
+  level: "warn"                     # 要生成的最低日志级别。值是debug，info，warn和error。默认为info。
+  file: "./data/path/to/logfile.log"  # 将输出记录到文件（以及stdout是否已设置）。确保目录和文件是可写的。
 
-## Nakama Console
+metrics: # 指标？
+  reporting_freq_sec: 60            # 指标导出的频率。默认值为 60 秒。
+  namespace: ""                     # Prometheus 的命名空间或 Stackdriver 指标的前缀。它总是在节点名称前面。默认值为空。
+  prometheus_port: 0                # 暴露 Prometheus 的端口。默认值为“0”，禁用 Prometheus 导出。
 
-The server provides a web UI which teams can use to inspect various data stored through the server APIs, view lightweight service metrics, manage player data, update storage objects, restrict access to production with permission profiles, and gain visibility into realtime features like active multiplayer matches. There is no separate installation required as it is embedded as part of the single server binary.
+database:
+  address:
+  - "ysr:123456@localhost:5432"          # 要连接的数据库节点列表。它应该遵循username:password@address:port/dbname（postgres://协议自动附加到路径）的形式。默认为root@localhost:26257.
+  conn_max_lifetime_ms: 0           # 在连接被终止并创建新连接之前重用数据库连接的时间（以毫秒为单位）。默认值为 0（不确定）。
+  max_open_conns: 0                 # 允许打开的数据库连接的最大数量。默认值为 0（无限制）。
+  max_idle_conns: 100               # 允许打开但未使用的数据库连接的最大数量。默认值为 100。
 
-You can navigate to it on your browser on [http://127.0.0.1:7351](http://127.0.0.1:7351).
+runtime:
+  env:                                        # 作为环境变量公开给运行时脚本的键值属性列表。
+  - "example_apikey=example_apivalue"
+  - "encryptionkey=afefa==e332*u13=971mldq"
+  path: "/tmp/modules/folders"                # 服务器在启动时扫描和加载的模块路径。默认值为data_dir/modules。
+  http_key: "testhttpkey"                  # 用于验证 HTTP 运行时调用的密钥。默认值为defaultkey。
 
-<img src=".github/accounts.jpg?raw=true" title="Account listing" width="1024" align="center">
-<img src=".github/status.jpg?raw=true" title="Status view" width="125" align="left">
-<img src=".github/storage.jpg?raw=true" title="Storage record view" width="125" align="left">
-<img src=".github/match.jpg?raw=true" title="Running matches view" width="125" align="left">
-<img src=".github/users.jpg?raw=true" title="Console users view" width="125" align="left">
-<img src=".github/modules.jpg?raw=true" title="Loaded modules view" width="125">
+socket:
+  server_key: "testsocketkey"                 # 用于建立与服务器的连接的服务器密钥。默认值为defaultkey
+  port: 7350
+  max_message_size_bytes: 4096 # 每条消息允许从客户端套接字读取的最大数据量（以字节为单位）。用于实时连接。默认值为 4096。     
+  read_timeout_ms: 10000       # 读取整个请求的最大持续时间（以毫秒为单位）。用于 HTTP 连接。默认值为 10000。
+  write_timeout_ms: 10000      # 超时写入响应之前的最大持续时间（以毫秒为单位）。用于 HTTP 连接。默认值为 10000。
+  idle_timeout_ms: 60000       # 启用保持活动时等待下一个请求的最长时间（以毫秒为单位）。用于 HTTP 连接。默认值为 60000。
+  write_wait_ms: 5000          # 写入数据时等待来自客户端的确认的时间（以毫秒为单位）。用于实时连接。默认值为 5000。
+  pong_wait_ms: 10000          # 发送 ping 后等待来自客户端的 pong 消息的时间（以毫秒为单位）。用于实时连接。默认值为 25000。
+  ping_period_ms: 8000         # Must be less than pong_wait_ms 客户端 ping 消息之间的等待时间（以毫秒为单位）。该值必须小于pong_wait_ms。用于实时连接。默认值为 15000。
+  outgoing_queue_size: 16      # 等待发送到客户端的最大消息数。如果超过这个值，客户端会被认为太慢并且会断开连接。在处理实时连接时使用。默认值为 16。
 
-## Deployment
+social:  # 社交网络获取用户信息
+  steam:  # steam
+  publisher_key: ""
+  app_id: 0
 
-Nakama can be deployed to any cloud provider such as Google Cloud, Azure, AWS, Digital Ocean, Heroku, or your own private cloud. You should setup and provision separate nodes for Nakama and CockroachDB.
+console:     # 嵌入式开发者控制台相关的配置
+  port: 7351
+  username: "admin"
+  password: "password"
 
-The recommended minimum production infrastructure for CockroachDB is outlined in [these docs](https://www.cockroachlabs.com/docs/stable/recommended-production-settings.html#basic-hardware-recommendations) and Nakama can be run on instance types as small as "g1-small" on Google Cloud although we recommend a minimum of "n1-standard-1" in production. The specific hardware requirements will depend on what features of the server are used. Reach out to us for help and advice on what servers to run.
+cluster:   # 节点应如何相互连接以形成集群
+  join:
+  - "10.0.0.2:7352"
+  - "10.0.0.3:7352"
+  gossip_bindaddr: "0.0.0.0"
+  gossip_bindport: 7352
+  rpc_port: 7353
+  local_priority: true
+  work_factor_interval_ms: 1000
 
-### Heroic Cloud
+matchmaker: # 赛事匹配/房间匹配
+  max_tickets: 2      # 每个会话或聚会允许的最大并发匹配票数。默认 3
+  interval_sec: 15    # 媒人尝试形成比赛的速度，以秒为单位。默认 15
+  max_intervals: 3    # 在允许最小计数之前，匹配器尝试在最大玩家计数处查找匹配的时间间隔。默认 2。
 
-You can support development, new features, and maintainance of the server by using the Heroic Labs' [Heroic Cloud](https://heroiclabs.com/heroic-cloud/) for deployment. This service handles the uptime, replication, backups, logs, data upgrades, and all other tasks involved with production server environments.
-
-Have a look at our [Heroic Cloud](https://heroiclabs.com/heroic-cloud/) service for more details.
-
-## Contribute
-
-The development roadmap is managed as GitHub issues and pull requests are welcome. If you're interested to add a feature which is not mentioned on the issue tracker please open one to create a discussion or drop in and discuss it in the [community forum](https://forum.heroiclabs.com).
-
-### Simple Builds
-
-All dependencies required for a build are vendored as part of the Go project. We recommend a modern release of the Go toolchain and do not store the codebase in the old GOPATH.
-
-1. Download the source tree.
-
-   ```shell
-   git clone "https://github.com/heroiclabs/nakama" nakama
-   cd nakama
-   ```
-
-2. Build the project from source.
-
-   ```shell
-   go build -trimpath -mod=vendor
-   ./nakama --version
-   ```
+iap:    # 应用内购买
+  apple:
+    shared_password: "password"
+  google:
+    client_email: "email@google.com"
+    private_key: "pk"
+  huawei:
+    public_key: "pk"
+    client_id: "id"
+    client_secret: "secret"
+```
 
 ### Full Source Builds
 
@@ -168,6 +152,49 @@ To build the codebase and generate all sources follow these steps.
    go build -trimpath -mod=vendor
    ```
 
-### License
 
-This project is licensed under the [Apache-2 License](https://github.com/heroiclabs/nakama/blob/master/LICENSE).
+
+nakama服务相关接口
+
+
+
+
+
+PostgreSQL 数据库相关指令
+
+```
+which psql
+pg_ctl -V
+ps -ef |grep postgres
+pg_ctl start
+\du
+```
+
+
+
+
+
+
+客户端基础接口
+
+1. 链接服务端
+   var client = new Nakama.Client("http", "127.0.0.1", 7350, "defaultKey");
+
+2. socket链接
+   var socket = client.NewSocket(); 
+   bool appearOnline = true; int connectionTimeout = 30; 
+   await socket.ConnectAsync(Session, appearOnline, connectionTimeout);
+
+3. 身份验证
+
+   // 几种身份验证 
+
+   1）通过设备ID登陆
+
+   2）FaceBook身份登陆
+   3）可以储存一部分客户信息进入session
+   4）session的生命周期的保持 （会话状态的确认判断是否过期）
+
+   5）注销会话
+
+4. 账户相关
